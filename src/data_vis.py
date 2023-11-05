@@ -109,3 +109,82 @@ def visualize_data6(taxi_zone_map_df):
     # show the plot
     plt.tight_layout()
     plt.show()
+
+
+def visualize_data7(input, taxi_zone_map, vmax=300):
+    taxi_zone_map = taxi_zone_map.to_numpy()  # Convert to numpy array
+
+    # set the size of the plot
+    plt.figure(figsize=(9, 9))
+
+    # create Color Map
+    # define the colors and the positions of those colors
+    colors = [[0, "honeydew"], [0.0001, "limegreen"], [0.5, "yellow"], [1, "orangered"]]
+    cmap_name = "green_yellow_red"
+    green_yellow_red = mcolors.LinearSegmentedColormap.from_list(cmap_name, colors)
+
+    # set the min and max values for the color scale
+    vmin = 0
+    vmax = vmax
+
+    # create the heat map
+    plt.imshow(input, cmap=green_yellow_red, vmin=vmin, vmax=vmax)
+
+    # remove x and y axis labels
+    plt.xticks([])
+    plt.yticks([])
+
+    rows, cols = taxi_zone_map.shape
+
+    # Check for boundary changes and draw lines
+    for i in range(rows):
+        for j in range(cols):
+            # Check right neighbor
+            if j < cols - 1 and taxi_zone_map[i, j] != taxi_zone_map[i, j + 1]:
+                plt.plot([j + 0.5, j + 0.5], [i - 0.5, i + 0.5], color="gray")
+            # Add line at the right edge of the map
+            elif j == cols - 1:
+                plt.plot([j + 0.5, j + 0.5], [i - 0.5, i + 0.5], color="gray")
+
+            # Check neighbor below
+            if i < rows - 1 and taxi_zone_map[i, j] != taxi_zone_map[i + 1, j]:
+                plt.plot([j - 0.5, j + 0.5], [i + 0.5, i + 0.5], color="gray")
+            # Add line at the bottom edge of the map
+            elif i == rows - 1:
+                plt.plot([j - 0.5, j + 0.5], [i + 0.5, i + 0.5], color="gray")
+
+            if int(np.array(taxi_zone_map)[i, j]) == 0:
+                # Change the color of the box to White
+                rect = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=True, color="lightblue")
+                plt.gca().add_patch(rect)
+
+    # add zone numbers
+    unique_zones = np.unique(taxi_zone_map)
+    for zone in unique_zones:
+        # Exclude the 0 zone
+        if zone == 0:
+            continue
+        # get the coordinates of all cells in this zone
+        y, x = np.where(taxi_zone_map == zone)
+        # compute the centroid
+        centroid_x = np.mean(x)
+        centroid_y = np.mean(y)
+        # add the label
+        plt.text(
+            centroid_x,
+            centroid_y,
+            str(int(zone)),
+            ha="center",
+            va="center",
+            color="black",
+            fontsize=6,
+            weight="bold",
+            rotation=30,
+        )
+
+    # add a color bar
+    plt.colorbar()
+
+    # show the plot
+    plt.tight_layout()
+    plt.show()
