@@ -1,6 +1,9 @@
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
 
 
 def visualize_data(input, taxi_zone_map, vmax=300):
@@ -188,3 +191,103 @@ def visualize_data7(input, taxi_zone_map, vmax=300):
     # show the plot
     plt.tight_layout()
     plt.show()
+
+
+def plot_losses(train_losses, val_losses):
+    plt.figure(figsize=(10, 7))
+    plt.plot(train_losses, color="blue", label="Training loss")
+    plt.plot(*zip(*val_losses), color="red", label="Validation loss")  # Unpack the tuples
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Training and Validation Loss Over Time")
+    plt.show()
+
+
+def show_loss(model, val_pu_ts, val_do, val_labels, taxi_zone_map, device):
+    with torch.no_grad():
+        if val_pu_ts is not None:
+            val_outputs = model(val_pu_ts.to(device), val_do.to(device))
+        else:
+            val_outputs = model(val_do.to(device))
+
+    val_labels = val_labels.to("cpu")
+    val_outputs = val_outputs.to("cpu")
+
+    # Calculate the MSE of the validation outputs and validation data
+    mse_loss = nn.MSELoss()
+    val_mse = mse_loss(val_outputs, val_labels)
+
+    # Calculate the MAE of the validation outputs and validation data
+    mae_loss = nn.L1Loss()
+    val_mae = mae_loss(val_outputs, val_labels)
+
+    print(val_mse, val_mae)
+
+    # np.array(taxi_zone_map)[9][3] #236
+    # np.array(taxi_zone_map)[10][3] #237
+    # np.array(taxi_zone_map)[11][3] #237
+
+    rows, cols = np.where(taxi_zone_map == 237)
+    val_mse_237 = mse_loss(val_outputs[:, :, rows, cols], val_labels[:, :, rows, cols])
+    val_mae_237 = mae_loss(val_outputs[:, :, rows, cols], val_labels[:, :, rows, cols])
+
+    print(f"validation MSE and MAE of block 237 (pixel) : {val_mse_237} , {val_mae_237} ")
+    print(f"validation MSE and MAE of block 237 : {val_mse_237*len(rows)} , {val_mae_237*len(rows)} ")
+
+    rows, cols = np.where(taxi_zone_map == 236)
+    val_mse_236 = mse_loss(val_outputs[:, :, rows, cols], val_labels[:, :, rows, cols])
+    val_mae_236 = mae_loss(val_outputs[:, :, rows, cols], val_labels[:, :, rows, cols])
+
+    print(f"validation MSE and MAE of block 236 (pixel) : {val_mse_236} , {val_mae_236} ")
+    print(f"validation MSE and MAE of block 236 : {val_mse_236*len(rows)} , {val_mae_236*len(rows)} ")
+
+    print("Calculate the MAE of the validation outputs and validation data")
+    mae_loss = nn.L1Loss(reduction="none")
+
+    print(mae_loss(val_outputs, val_labels).shape)
+
+    print(f"Maximum MSE: {torch.max(torch.mean(mae_loss(val_outputs, val_labels), (0,1) ))}")
+
+    visualize_data7(torch.mean(mae_loss(val_outputs, val_labels), (0, 1)), taxi_zone_map, 10)
+
+
+def create_predicted_real_df(model, val_pu_ts, val_do, val_labels, taxi_zone_map, device, date_list):
+    with torch.no_grad():
+        if val_pu_ts is not None:
+            val_outputs = model(val_pu_ts.to(device), val_do.to(device))
+        else:
+            val_outputs = model(val_do.to(device))
+
+    val_labels = val_labels.to("cpu")
+    val_outputs = val_outputs.to("cpu")
+
+    # Create a dataframe
+    rows_list = []
+
+    for i in range(val_labels.shape[0]):  # Assuming first dimension is the batch size
+        for m in range(val_labels.shape[1]):
+            date = date_list[i + m].date()  # Extracting just the date
+            hour = date_list[i + m].hour  # Extracting the hour
+            minute = date_list[i + m].minute  # Extracting the minute
+
+            # We start each row with date, hour, and minute
+            row = {"Date": date, "Hour": hour, "Minute Interval": minute}
+
+            for j in range(val_labels.shape[-2]):  # Assuming second to last dimension corresponds to rows in your map
+                for k in range(val_labels.shape[-1]):  # Assuming last dimension corresponds to cols in your map
+                    location_id = taxi_zone_map.iloc[j, k]
+
+                    true_value = val_labels[i, m, j, k].item()
+                    predicted_value = val_outputs[i, m, j, k].item()
+                    predicted_value = max(int(np.floor(predicted_value)), 0)
+
+                    # Add true value and prediction for each location ID
+                    row[f"{location_id}_gold"] = row.get(f"{location_id}_gold", 0) + true_value
+                    row[f"{location_id}_pred"] = row.get(f"{location_id}_pred", 0) + predicted_value
+
+            rows_list.append(row)
+
+    df = pd.DataFrame(rows_list)
+
+    return df
