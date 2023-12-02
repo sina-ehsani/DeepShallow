@@ -7,6 +7,12 @@ from tqdm import tqdm
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def model_num_params(model):
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters: {total_params}")
+    return
+
+
 class WeightedMSELoss(nn.Module):
     def __init__(self, weight=10.0):
         super(WeightedMSELoss, self).__init__()
